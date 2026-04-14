@@ -73,7 +73,7 @@ function parseCSV(text) {
   }
   return rows.map(function(row,idx){
     var emp=Object.assign({_id:idx},row);
-    var loc=locationCol?(emp[locationCol]||""):"";
+    var loc=locationCol?(emp[locationCol]||")":"";
     if(loc&&!emp.state){var lp=loc.split(",");if(lp.length>=2){if(!emp.city)emp.city=(lp[0]||"").trim();emp.state=normalizeState((lp[lp.length-1]||"").trim());}else{var as=normalizeState(loc.trim());if(as)emp.state=as;else if(!emp.city)emp.city=loc.trim();}}
     if(emp.state)emp.state=normalizeState(emp.state);
     emp._municipality=detectMunicipality(emp.city||"",emp.state||"");
@@ -169,28 +169,19 @@ function JurisdictionSection(props) {
     ),
     React.createElement("div",{style:{display:"flex",flexDirection:"column",gap:8}},
       states.map(function(state){
-        var data=jurisdictions[state];
-        var detectedMuns=data.municipalities||{};
-        var knownMuns=MUNICIPALITIES[state]||[];
-        var allMuns=knownMuns.length>0?knownMuns:Object.keys(detectedMuns);
-        var sk="state__"+state;
+        var data=jurisdictions[state],muns=data.municipalities?Object.keys(data.municipalities):[],sk="state__"+state;
         return React.createElement("div",{key:state,style:{padding:"10px 14px",borderRadius:8,border:"1px solid #eee",background:"#fafaf8"}},
-          React.createElement("div",{style:{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:allMuns.length?8:0}},
+          React.createElement("div",{style:{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:muns.length?8:0}},
             React.createElement("div",{style:{fontSize:13,fontWeight:600,color:"#111"}},state),
             linked?React.createElement("div",{style:{fontSize:12,fontWeight:600,color:PURPLE,background:PURPLE_LIGHT,padding:"2px 10px",borderRadius:10}},data.employees+" employees")
                   :React.createElement("div",{style:{display:"flex",alignItems:"center",gap:6}},React.createElement("input",{type:"number",min:0,value:gc(sk,data.employees),onChange:function(e){sc(sk,e.target.value);},style:{width:60,padding:"3px 8px",borderRadius:6,border:"1.5px solid "+PURPLE,fontSize:12,color:"#111",textAlign:"center",outline:"none"}}),React.createElement("span",{style:{fontSize:11,color:"#888"}},"employees"))
           ),
-          allMuns.length>0&&React.createElement("div",null,
-            React.createElement("div",{style:{fontSize:10,color:"#aaa",marginBottom:5,textTransform:"uppercase",letterSpacing:0.5}},"Tracked municipalities"),
-            React.createElement("div",{style:{display:"flex",flexWrap:"wrap",gap:5}},
-              allMuns.map(function(mun){
-                var mk="mun__"+state+"__"+mun;
-                var count=detectedMuns[mun]||null;
-                return linked
-                  ?React.createElement("div",{key:mun,style:{fontSize:11,padding:"2px 8px",borderRadius:10,background:count?"#f5f0ff":"#f5f5f5",border:"1px solid "+(count?"#e0d5ff":"#eee"),color:count?PURPLE:"#aaa"}},mun+" \xB7 "+(count||0))
-                  :React.createElement("div",{key:mun,style:{display:"flex",alignItems:"center",gap:5,fontSize:11,padding:"3px 8px",borderRadius:10,background:"#fff",border:"1px solid #ddd"}},React.createElement("span",{style:{color:"#555"}},mun),React.createElement("span",{style:{color:"#ccc"}},"\xB7"),React.createElement("input",{type:"number",min:0,value:gc(mk,count||0),onChange:function(e){sc(mk,e.target.value);},style:{width:40,padding:"1px 4px",borderRadius:4,border:"1px solid "+PURPLE,fontSize:11,color:"#111",textAlign:"center",outline:"none"}}));
-              })
-            )
+          muns.length>0&&React.createElement("div",{style:{display:"flex",flexWrap:"wrap",gap:5}},
+            muns.map(function(mun){
+              var mk="mun__"+state+"__"+mun;
+              return linked?React.createElement("div",{key:mun,style:{fontSize:11,padding:"2px 8px",borderRadius:10,background:"#fff",border:"1px solid #e0e0e0",color:"#555"}},mun+" \xB7 "+data.municipalities[mun])
+                           :React.createElement("div",{key:mun,style:{display:"flex",alignItems:"center",gap:5,fontSize:11,padding:"3px 8px",borderRadius:10,background:"#fff",border:"1px solid #ddd"}},React.createElement("span",{style:{color:"#555"}},mun),React.createElement("span",{style:{color:"#ccc"}},"\xB7"),React.createElement("input",{type:"number",min:0,value:gc(mk,data.municipalities[mun]),onChange:function(e){sc(mk,e.target.value);},style:{width:40,padding:"1px 4px",borderRadius:4,border:"1px solid "+PURPLE,fontSize:11,color:"#111",textAlign:"center",outline:"none"}}));
+            })
           )
         );
       })
@@ -243,313 +234,12 @@ function OrgProfilePage(props) {
   );
 }
 
-// ── Hosting Setup Panel ──────────────────────────────────────────────────────
-var HOSTING_STEPS = [
-  {
-    id: "name",
-    question: "Let's set up your employee portal! 🚀\n\nFirst, what would you like to name this Live Doc campaign?\n\nThis is the internal name you'll use to track it.",
-    inputType: "text",
-    placeholder: "e.g. 2025 Employee Handbook Rollout",
-    field: "campaignName"
-  },
-  {
-    id: "visibility",
-    question: function(d) { return "Great name, \"" + d.campaignName + "\"!\n\nShould this portal be Public or Private?\n\n• Public — anyone with the link can view\n• Private — employees must be authenticated"; },
-    chips: ["Private (recommended)", "Public"],
-    field: "visibility"
-  },
-  {
-    id: "signature",
-    question: "Should employees be required to sign/acknowledge the handbook?",
-    chips: ["Signature Required", "No Signature Needed"],
-    field: "signatureRequired"
-  },
-  {
-    id: "employees",
-    question: "How would you like to add employees to this campaign?",
-    chips: ["Add Manually", "By Jurisdiction (auto)", "By Groups (auto)"],
-    field: "employeeMethod"
-  },
-  {
-    id: "branding",
-    question: "Now let's brand your employee portal.\n\nUpload a logo, banner image, and pick a key accent color.",
-    inputType: "branding",
-    field: "branding"
-  },
-  {
-    id: "email",
-    question: "Write the email invite message employees will receive when you send the handbook.",
-    inputType: "textarea",
-    placeholder: "Hi {first_name},\n\nPlease review and acknowledge our updated Employee Handbook...",
-    field: "emailMessage"
-  },
-  {
-    id: "preview",
-    question: "Everything looks great! Here's a preview of your employee portal.\n\nReady to save as a draft?",
-    inputType: "preview",
-    field: null
-  },
-  {
-    id: "send",
-    question: null,
-    inputType: "send",
-    field: null
-  }
-];
-
-function HostingPanel(props) {
-  var org = props.org, employees = props.employees, onClose = props.onClose, onSaved = props.onSaved, onPublished = props.onPublished, startAtSend = props.startAtSend;
-  var empCount = employees.length;
-
-  var initStep = startAtSend ? HOSTING_STEPS.length - 1 : 0;
-  var [messages, setMessages] = useState(startAtSend
-    ? [{from:"ai", text:"Ready to publish and send to employees?", inputType:"send"}]
-    : [{from:"ai", text: HOSTING_STEPS[0].question}]
-  );
-  var [step, setStep] = useState(initStep);
-  var [input, setInput] = useState("");
-  var [data, setData] = useState({campaignName:"",visibility:"",signatureRequired:"",employeeMethod:"",branding:{logo:"",banner:"",color:"#6B21A8"},emailMessage:""});
-  var [loading, setLoading] = useState(false);
-  var [accentColor, setAccentColor] = useState("#6B21A8");
-  var [sendingNow, setSendingNow] = useState(false);
-  var [sendDone, setSendDone] = useState(startAtSend ? false : false);
-  var bottomRef = useRef(null);
-
-  function scrollBot() { setTimeout(function(){ if(bottomRef.current) bottomRef.current.scrollIntoView({behavior:"smooth"}); }, 60); }
-
-  function advance(answer, newData) {
-    var next = step + 1;
-    setStep(next);
-    setInput("");
-    setLoading(true);
-    setTimeout(function() {
-      setLoading(false);
-      if (next < HOSTING_STEPS.length) {
-        var s = HOSTING_STEPS[next];
-        var q = typeof s.question === "function" ? s.question(newData) : s.question;
-        setMessages(function(p){ return p.concat([{from:"ai", text: q, chips: s.chips||null, inputType: s.inputType||null}]); });
-      }
-      scrollBot();
-    }, 500);
-  }
-
-  function send() {
-    var t = input.trim(); if (!t) return;
-    var s = HOSTING_STEPS[step];
-    var nd = Object.assign({}, data, s.field ? {[s.field]: t} : {});
-    setData(nd);
-    setMessages(function(p){ return p.concat([{from:"user", text: t}]); });
-    advance(t, nd);
-  }
-
-  function pickChip(chip) {
-    var s = HOSTING_STEPS[step];
-    var nd = Object.assign({}, data, s.field ? {[s.field]: chip} : {});
-    setData(nd);
-    setMessages(function(p){ return p.concat([{from:"user", text: chip}]); });
-    advance(chip, nd);
-  }
-
-  function submitTextarea() {
-    var t = input.trim(); if (!t) return;
-    var s = HOSTING_STEPS[step];
-    var nd = Object.assign({}, data, s.field ? {[s.field]: t} : {});
-    setData(nd);
-    setMessages(function(p){ return p.concat([{from:"user", text: "✉️ Email message set"}]); });
-    advance(t, nd);
-  }
-
-  function saveDraft() {
-    setMessages(function(p){ return p.concat([{from:"ai", text:"✅ Live Doc saved as draft!\n\nYour employee portal is ready. Head back to the dashboard and click \"Send to Employees\" when you're ready to publish and notify " + empCount + " employees."}]); });
-    setTimeout(function(){ onSaved(data); }, 400);
-    scrollBot();
-  }
-
-  var currentStep = HOSTING_STEPS[step];
-  var isLast = step >= HOSTING_STEPS.length - 1;
-
-  function renderBrandingWidget() {
-    return React.createElement("div", {style:{background:"#f8f6ff",borderRadius:12,padding:16,display:"flex",flexDirection:"column",gap:12,marginTop:8,maxWidth:320}},
-      React.createElement("div", {style:{fontSize:12,fontWeight:600,color:"#555",marginBottom:4}}, "Portal Branding"),
-      React.createElement("div", null,
-        React.createElement("div", {style:{fontSize:11,color:"#888",marginBottom:6}}, "Logo (click to upload)"),
-        React.createElement("div", {style:{width:80,height:80,borderRadius:10,border:"2px dashed #c4b5fd",background:"#fff",display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",fontSize:28}},
-          data.branding.logo ? React.createElement("img",{src:data.branding.logo,style:{width:"100%",height:"100%",objectFit:"contain",borderRadius:8}}) : "🖼️"
-        )
-      ),
-      React.createElement("div", null,
-        React.createElement("div", {style:{fontSize:11,color:"#888",marginBottom:6}}, "Banner Image (click to upload)"),
-        React.createElement("div", {style:{width:"100%",height:60,borderRadius:8,border:"2px dashed #c4b5fd",background:"#fff",display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",fontSize:13,color:"#aaa"}},
-          data.branding.banner ? React.createElement("img",{src:data.branding.banner,style:{width:"100%",height:"100%",objectFit:"cover",borderRadius:6}}) : "Click to upload banner"
-        )
-      ),
-      React.createElement("div", null,
-        React.createElement("div", {style:{fontSize:11,color:"#888",marginBottom:6}}, "Accent Color"),
-        React.createElement("div", {style:{display:"flex",alignItems:"center",gap:10}},
-          React.createElement("input", {type:"color", value:accentColor, onChange:function(e){ setAccentColor(e.target.value); setData(function(d){ return Object.assign({},d,{branding:Object.assign({},d.branding,{color:e.target.value})}); }); }, style:{width:36,height:36,borderRadius:6,border:"1px solid #ddd",cursor:"pointer",padding:2}}),
-          React.createElement("span", {style:{fontSize:12,color:"#666"}}, accentColor),
-          [PURPLE,"#0EA5E9","#10B981","#F59E0B","#EF4444","#8B5CF6"].map(function(c){
-            return React.createElement("div",{key:c,onClick:function(){setAccentColor(c);setData(function(d){return Object.assign({},d,{branding:Object.assign({},d.branding,{color:c})});});},style:{width:20,height:20,borderRadius:"50%",background:c,cursor:"pointer",border:accentColor===c?"2px solid #333":"2px solid transparent"}});
-          })
-        )
-      ),
-      React.createElement("button", {onClick:function(){
-        setMessages(function(p){ return p.concat([{from:"user",text:"🎨 Branding configured — accent color "+accentColor}]); });
-        advance("branding done", data);
-      }, style:{padding:"8px 0",borderRadius:8,border:"none",background:PURPLE,color:"white",fontSize:13,fontWeight:600,cursor:"pointer"}}, "Save Branding →")
-    );
-  }
-
-  function renderPreview() {
-    return React.createElement("div", {style:{background:"#f8f6ff",borderRadius:12,padding:16,marginTop:8,maxWidth:320}},
-      React.createElement("div", {style:{fontSize:12,fontWeight:700,color:"#555",marginBottom:10}}, "Portal Preview"),
-      React.createElement("div", {style:{background:"#fff",borderRadius:10,overflow:"hidden",border:"1px solid #e8e8e8",boxShadow:"0 4px 12px rgba(0,0,0,0.08)"}},
-        React.createElement("div", {style:{height:48,background:data.branding.color||PURPLE,display:"flex",alignItems:"center",padding:"0 16px"}},
-          React.createElement("div", {style:{fontSize:14,fontWeight:700,color:"white"}}, org.companyName||"Your Company")
-        ),
-        React.createElement("div", {style:{padding:16}},
-          React.createElement("div", {style:{fontSize:13,fontWeight:600,color:"#111",marginBottom:4}}, data.campaignName||"Employee Handbook"),
-          React.createElement("div", {style:{fontSize:11,color:"#888",marginBottom:12}}, [data.visibility, data.signatureRequired].filter(Boolean).join(" · ")),
-          React.createElement("div", {style:{background:"#f4f4f1",borderRadius:8,padding:"10px 12px",fontSize:12,color:"#555",marginBottom:12,fontStyle:"italic"}}, data.emailMessage ? data.emailMessage.slice(0,80)+"..." : "Your email invite will appear here..."),
-          React.createElement("button", {style:{width:"100%",padding:"9px 0",borderRadius:8,border:"none",background:data.branding.color||PURPLE,color:"white",fontSize:13,fontWeight:600,cursor:"pointer"}}, data.signatureRequired==="Signature Required"?"Review & Sign":"View Handbook")
-        )
-      ),
-      React.createElement("button", {onClick:saveDraft, style:{marginTop:12,width:"100%",padding:"10px 0",borderRadius:8,border:"none",background:PURPLE,color:"white",fontSize:13,fontWeight:600,cursor:"pointer"}}, "💾 Save as Draft")
-    );
-  }
-
-  function renderSendWidget() {
-    if (sendDone) {
-      return React.createElement("div", {style:{paddingLeft:34,marginTop:8}},
-        React.createElement("div", {style:{background:"#D1FAE5",borderRadius:12,padding:"16px 18px",maxWidth:340,border:"1px solid #6EE7B7"}},
-          React.createElement("div", {style:{fontSize:24,marginBottom:8}}, "📬"),
-          React.createElement("div", {style:{fontSize:14,fontWeight:700,color:"#065F46",marginBottom:4}}, empCount+" employees notified!"),
-          React.createElement("div", {style:{fontSize:12,color:"#047857",lineHeight:1.6}}, "Invites sent. Track acknowledgments from your dashboard."),
-          React.createElement("button", {onClick:onClose, style:{marginTop:12,width:"100%",padding:"9px 0",borderRadius:8,border:"none",background:"#059669",color:"white",fontSize:13,fontWeight:600,cursor:"pointer"}}, "Back to Dashboard")
-        )
-      );
-    }
-    return React.createElement("div", {style:{paddingLeft:34,marginTop:8}},
-      React.createElement("div", {style:{background:"#f8f6ff",borderRadius:12,padding:"16px 18px",maxWidth:340,border:"1px solid #e0d5ff"}},
-        React.createElement("div", {style:{fontSize:11,fontWeight:700,color:PURPLE,textTransform:"uppercase",letterSpacing:0.8,marginBottom:12}}, "Campaign Summary"),
-        [
-          {label:"Campaign", value: data.campaignName || org.companyName+" Handbook"},
-          {label:"Visibility", value: data.visibility || "Private"},
-          {label:"Signature", value: data.signatureRequired || "Not required"},
-          {label:"Employees", value: data.employeeMethod || "All employees"},
-        ].map(function(row,i){
-          return React.createElement("div", {key:i, style:{display:"flex",justifyContent:"space-between",paddingBottom:i<3?"7px":"0",marginBottom:i<3?"7px":"0",borderBottom:i<3?"1px solid #ede8ff":"none"}},
-            React.createElement("span", {style:{fontSize:12,color:"#888"}}, row.label),
-            React.createElement("span", {style:{fontSize:12,fontWeight:600,color:"#111"}}, row.value)
-          );
-        }),
-        React.createElement("div", {style:{marginTop:12,padding:"10px 12px",background:"#D1FAE5",borderRadius:8,display:"flex",alignItems:"center",gap:10,border:"1px solid #6EE7B7"}},
-          React.createElement("span", {style:{fontSize:20}}, "👥"),
-          React.createElement("div", null,
-            React.createElement("div", {style:{fontSize:15,fontWeight:700,color:"#065F46"}}, empCount+" employees"),
-            React.createElement("div", {style:{fontSize:11,color:"#047857"}}, "will receive an invite")
-          )
-        ),
-        React.createElement("div", {style:{marginTop:10,fontSize:11,color:"#92400E",background:"#FFFBEB",borderRadius:6,padding:"8px 10px",border:"1px solid #FDE68A",lineHeight:1.5}},
-          "⚠️ Employees will be notified immediately once published."
-        ),
-        React.createElement("button", {
-          onClick: function(){
-            setSendingNow(true);
-            setTimeout(function(){
-              setSendingNow(false);
-              setSendDone(true);
-              if(onPublished) onPublished();
-              setMessages(function(p){ return p.concat([{from:"user",text:"🚀 Publish & Send Now"}]); });
-              scrollBot();
-            }, 1800);
-          },
-          disabled: sendingNow,
-          style:{marginTop:12,width:"100%",padding:"10px 0",borderRadius:8,border:"none",background:sendingNow?"#a78bfa":PURPLE,color:"white",fontSize:13,fontWeight:700,cursor:sendingNow?"default":"pointer",display:"flex",alignItems:"center",justifyContent:"center",gap:6}
-        }, sendingNow
-          ? React.createElement("span", null, "Sending", React.createElement("span", {style:{opacity:0.7}}, "..."))
-          : "🚀 Publish & Send Now"
-        )
-      )
-    );
-  }
-
-    return React.createElement("div", {style:{position:"fixed",top:0,right:0,bottom:0,width:420,background:"#fff",borderLeft:"1px solid #eee",display:"flex",flexDirection:"column",boxShadow:"-8px 0 32px rgba(107,33,168,0.18)",zIndex:1000}},
-    // Header
-    React.createElement("div", {style:{padding:"16px 20px",borderBottom:"1px solid #eee",display:"flex",alignItems:"center",gap:10,flexShrink:0,background:PURPLE_LIGHT}},
-      React.createElement("div", {style:{width:28,height:28,borderRadius:8,background:PURPLE,display:"flex",alignItems:"center",justifyContent:"center",fontSize:14}}, "🚀"),
-      React.createElement("div", null,
-        React.createElement("div", {style:{fontSize:13,fontWeight:700,color:"#111"}}, "Hosting Setup"),
-        React.createElement("div", {style:{fontSize:11,color:"#888"}}, "Step "+(Math.min(step+1,HOSTING_STEPS.length))+" of "+HOSTING_STEPS.length)
-      ),
-      React.createElement("button", {onClick:onClose, style:{marginLeft:"auto",background:"none",border:"none",fontSize:18,cursor:"pointer",color:"#888",lineHeight:1}}, "×")
-    ),
-    // Progress bar
-    React.createElement("div", {style:{height:3,background:"#eee",flexShrink:0}},
-      React.createElement("div", {style:{height:"100%",background:PURPLE,width:(Math.min(step,HOSTING_STEPS.length)/HOSTING_STEPS.length*100)+"%",transition:"width 0.4s ease"}})
-    ),
-    // Messages
-    React.createElement("div", {style:{flex:1,overflowY:"auto",padding:"16px 20px 0"}},
-      messages.map(function(m,i) {
-        var isLastAI = m.from==="ai" && i===messages.length-1;
-        return React.createElement("div", {key:i, style:{marginBottom:14}},
-          React.createElement("div", {style:{display:"flex",justifyContent:m.from==="user"?"flex-end":"flex-start",alignItems:"flex-start",gap:8}},
-            m.from==="ai" && React.createElement("div", {style:{width:26,height:26,borderRadius:"50%",background:PURPLE,display:"flex",alignItems:"center",justifyContent:"center",fontSize:10,color:"white",fontWeight:700,flexShrink:0,marginTop:2}}, "AI"),
-            React.createElement("div", {style:{maxWidth:"82%",padding:"10px 13px",borderRadius:m.from==="user"?"14px 14px 4px 14px":"14px 14px 14px 4px",background:m.from==="user"?PURPLE:"#f4f4f1",color:m.from==="user"?"white":"#111",fontSize:13,lineHeight:1.6,whiteSpace:"pre-wrap"}}, m.text)
-          ),
-          isLastAI && m.chips && React.createElement("div", {style:{paddingLeft:34,marginTop:8,display:"flex",flexWrap:"wrap",gap:6}},
-            m.chips.map(function(chip){
-              return React.createElement("button", {key:chip, onClick:function(){pickChip(chip);}, style:{padding:"6px 13px",borderRadius:20,border:"1.5px solid #d0d0d0",background:"#fff",color:"#333",fontSize:12,cursor:"pointer"}}, chip);
-            })
-          ),
-          isLastAI && m.inputType==="branding" && React.createElement("div",{style:{paddingLeft:34}}, renderBrandingWidget()),
-          isLastAI && m.inputType==="preview" && React.createElement("div",{style:{paddingLeft:34}}, renderPreview()),
-          (m.inputType==="send") && React.createElement("div",null, renderSendWidget())
-        );
-      }),
-      loading && React.createElement("div", {style:{display:"flex",alignItems:"center",gap:8,marginBottom:14}},
-        React.createElement("div", {style:{width:26,height:26,borderRadius:"50%",background:PURPLE,display:"flex",alignItems:"center",justifyContent:"center",fontSize:10,color:"white",fontWeight:700}}, "AI"),
-        React.createElement("div", {style:{padding:"10px 14px",borderRadius:"14px 14px 14px 4px",background:"#f4f4f1",display:"flex",gap:4}},
-          [0,1,2].map(function(i){ return React.createElement("div",{key:i,style:{width:5,height:5,borderRadius:"50%",background:"#999",animation:"bounce 1s "+(i*0.2)+"s infinite"}}); })
-        )
-      ),
-      React.createElement("div", {ref:bottomRef})
-    ),
-    // Input area — only show for text/textarea steps, not chip/branding/preview steps
-    currentStep && (currentStep.inputType==="text" || currentStep.inputType==="textarea") && !loading &&
-      React.createElement("div", {style:{padding:"12px 16px",borderTop:"1px solid #eee",flexShrink:0}},
-        currentStep.inputType==="textarea"
-          ? React.createElement("div", {style:{display:"flex",flexDirection:"column",gap:8}},
-              React.createElement("textarea", {value:input, onChange:function(e){setInput(e.target.value);}, placeholder:currentStep.placeholder||"Type here...", rows:5, style:{width:"100%",padding:"9px 12px",borderRadius:8,border:"1px solid #ddd",fontSize:13,resize:"vertical",outline:"none",fontFamily:"inherit"}}),
-              React.createElement("button", {onClick:submitTextarea, disabled:!input.trim(), style:{padding:"9px 0",borderRadius:8,border:"none",background:input.trim()?PURPLE:"#ddd",color:"white",fontSize:13,fontWeight:600,cursor:input.trim()?"pointer":"default"}}, "Save Email Message →")
-            )
-          : React.createElement("div", {style:{display:"flex",gap:8}},
-              React.createElement("input", {value:input, onChange:function(e){setInput(e.target.value);}, onKeyDown:function(e){if(e.key==="Enter")send();}, placeholder:currentStep.placeholder||"Type your answer...", style:{flex:1,padding:"9px 12px",borderRadius:8,border:"1px solid #ddd",fontSize:13,outline:"none"}}),
-              React.createElement("button", {onClick:send, disabled:!input.trim(), style:{padding:"9px 14px",borderRadius:8,border:"none",background:input.trim()?PURPLE:"#ddd",color:"white",fontSize:13,cursor:input.trim()?"pointer":"default"}}, "→")
-            )
-      )
-  );
-}
-
 // ── Dashboard Home ────────────────────────────────────────────────────────────
 function HomePage(props) {
-  var org=props.org, employees=props.employees, jurisdictions=props.jurisdictions;
-  var onHostingDone=props.onHostingDone, hostingDone=props.hostingDone;
+  var org=props.org,employees=props.employees,jurisdictions=props.jurisdictions;
   var empCount=employees.length;
   var stateCount=Object.keys(jurisdictions).length;
-  var [showHosting, setShowHosting] = useState(false);
-  var [hostingMode, setHostingMode] = useState("setup"); // "setup" | "send"
-  var [published, setPublished] = useState(false);
-
-  var nextSteps = [
-    {done:true, title:"Review your handbook", desc:"Check AI-generated policies for accuracy", btn:null, hi:false, action:null},
-    {done:true, title:"Approve & finalize", desc:"Lock in the handbook for distribution", btn:null, hi:false, action:null},
-    {done:hostingDone, title:"Host your handbook", desc:"Publish to a secure, shareable URL employees can access anytime", btn: hostingDone ? "✓ Hosting Configured" : "Set Up Hosting →", hi:!hostingDone, action: hostingDone ? null : function(){ setHostingMode("setup"); setShowHosting(true); }},
-    {done:published, title:"Send to employees", desc:"Email the handbook link to all "+empCount+" employees and collect acknowledgments", btn: published ? "✓ Sent!" : "Send to Employees →", hi:hostingDone&&!published, disabled:!hostingDone||published, action: (hostingDone&&!published) ? function(){ setHostingMode("send"); setShowHosting(true); } : null},
-    {done:false, title:"Track acknowledgments", desc:"See who has read and signed off on the handbook", btn:"View Tracker →", hi:false, action:null}
-  ];
-
-  return React.createElement("div", {style:{flex:1,overflowY:"auto",position:"relative",transition:"padding-right 0.3s ease",paddingRight:showHosting?420:0}},
+  return React.createElement("div",{style:{flex:1,overflowY:"auto"}},
     React.createElement("div",{style:{background:"linear-gradient(120deg,"+PURPLE_LIGHT+" 0%,#ede9fe 100%)",padding:"28px 32px",borderBottom:"1px solid #e8e8e8"}},
       React.createElement("div",{style:{fontSize:24,fontWeight:700,color:PURPLE,marginBottom:4}},"Welcome to SixFifty"),
       React.createElement("div",{style:{fontSize:14,color:"#7c3aed"}},"Logged in as "+(org.companyName||"your organization"))
@@ -559,56 +249,42 @@ function HomePage(props) {
         QUICK_ACTIONS.map(function(qa){return React.createElement("div",{key:qa.title,style:{background:"#fff",borderRadius:12,padding:"18px 20px",border:"1px solid #eee",display:"flex",flexDirection:"column",gap:8}},React.createElement("div",{style:{width:34,height:34,borderRadius:8,background:qa.color,display:"flex",alignItems:"center",justifyContent:"center",fontSize:17}},qa.icon),React.createElement("div",{style:{fontSize:13,fontWeight:600,color:"#111"}},qa.title),React.createElement("div",{style:{fontSize:12,color:"#888",lineHeight:1.5,flex:1}},qa.desc),React.createElement("button",{style:{marginTop:4,padding:"6px 14px",borderRadius:20,border:"1.5px solid "+PURPLE,background:"transparent",color:PURPLE,fontSize:12,fontWeight:600,cursor:"pointer",alignSelf:"flex-start"}},qa.btn));})
       ),
       React.createElement("div",{style:{background:"#fff",borderRadius:12,border:"1px solid #eee",padding:"20px 24px",marginBottom:28,display:"flex",alignItems:"center",gap:20}},
-        React.createElement("div",{style:{width:48,height:48,borderRadius:10,background:PURPLE_LIGHT,display:"flex",alignItems:"center",justifyContent:"center",fontSize:24,flexShrink:0}},"📘"),
+        React.createElement("div",{style:{width:48,height:48,borderRadius:10,background:PURPLE_LIGHT,display:"flex",alignItems:"center",justifyContent:"center",fontSize:24,flexShrink:0}},"\uD83D\uDCD8"),
         React.createElement("div",{style:{flex:1}},
           React.createElement("div",{style:{fontSize:15,fontWeight:700,color:"#111",marginBottom:2}},(org.companyName||"Your Company")+" Employee Handbook"),
-          React.createElement("div",{style:{fontSize:12,color:"#888"}},"Generated today · "+stateCount+" jurisdictions · "+empCount+" employees")
+          React.createElement("div",{style:{fontSize:12,color:"#888"}},"Generated today \xB7 "+stateCount+" jurisdictions \xB7 "+empCount+" employees")
         ),
         React.createElement("div",{style:{display:"flex",alignItems:"center",gap:12}},
-          React.createElement("span",{style:{fontSize:12,fontWeight:600,padding:"4px 12px",borderRadius:20,background:"#FEF9C3",color:"#854D0E",border:"1px solid #FDE047"}},"⚠ Needs Review"),
-          React.createElement("span",{style:{fontSize:12,fontWeight:600,padding:"4px 12px",borderRadius:20,background:"#D1FAE5",color:"#065F46"}},"✓ Complete"),
-          React.createElement("button",{style:{padding:"8px 18px",borderRadius:8,border:"none",background:PURPLE,color:"white",fontSize:13,fontWeight:600,cursor:"pointer"}},"Review Handbook →")
+          React.createElement("span",{style:{fontSize:12,fontWeight:600,padding:"4px 12px",borderRadius:20,background:"#FEF9C3",color:"#854D0E",border:"1px solid #FDE047"}},"\u26A0 Needs Review"),
+          React.createElement("span",{style:{fontSize:12,fontWeight:600,padding:"4px 12px",borderRadius:20,background:"#D1FAE5",color:"#065F46"}},"\u2713 Complete"),
+          React.createElement("button",{style:{padding:"8px 18px",borderRadius:8,border:"none",background:PURPLE,color:"white",fontSize:13,fontWeight:600,cursor:"pointer"}},"Review Handbook \u2192")
         )
       ),
       React.createElement("div",{style:{display:"grid",gridTemplateColumns:"1.4fr 1fr",gap:24}},
         React.createElement("div",{style:{display:"flex",flexDirection:"column",gap:24}},
           React.createElement("div",{style:{background:"#fff",borderRadius:12,border:"1px solid #eee",padding:"20px 24px"}},
             React.createElement("div",{style:{fontSize:14,fontWeight:700,color:"#111",marginBottom:4}},"Your Jurisdictions"),
-            React.createElement("div",{style:{fontSize:12,color:"#888",marginBottom:16}},stateCount+" active states · "+empCount+" employees"),
+            React.createElement("div",{style:{fontSize:12,color:"#888",marginBottom:16}},stateCount+" active states \xB7 "+empCount+" employees"),
             React.createElement(USMap,{activeStates:jurisdictions}),
             React.createElement("div",{style:{marginTop:12,display:"flex",flexWrap:"wrap",gap:6}},
-              Object.keys(jurisdictions).map(function(state){return React.createElement("div",{key:state,style:{fontSize:11,padding:"3px 10px",borderRadius:10,background:PURPLE_LIGHT,color:PURPLE,fontWeight:500}},state+" · "+jurisdictions[state].employees);})
+              Object.keys(jurisdictions).map(function(state){return React.createElement("div",{key:state,style:{fontSize:11,padding:"3px 10px",borderRadius:10,background:PURPLE_LIGHT,color:PURPLE,fontWeight:500}},state+" \xB7 "+jurisdictions[state].employees);})
             )
           ),
           React.createElement("div",{style:{background:"#fff",borderRadius:12,border:"1px solid #eee",padding:"20px 24px"}},
             React.createElement("div",{style:{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:16}},
-              React.createElement("div",null,
-                React.createElement("div",{style:{fontSize:14,fontWeight:700,color:"#111"}},"Next Steps"),
-                React.createElement("div",{style:{fontSize:12,color:"#888",marginTop:2}},"Get your handbook live and into employees' hands")
-              ),
-              React.createElement("div",{style:{fontSize:11,color:PURPLE,fontWeight:600}},hostingDone?"3 of 5 complete":"2 of 5 complete")
+              React.createElement("div",null,React.createElement("div",{style:{fontSize:14,fontWeight:700,color:"#111"}},"Next Steps"),React.createElement("div",{style:{fontSize:12,color:"#888",marginTop:2}},"Get your handbook live and into employees\u2019 hands")),
+              React.createElement("div",{style:{fontSize:11,color:PURPLE,fontWeight:600}},"2 of 5 complete")
             ),
-            nextSteps.map(function(task,i){
+            [{done:true,title:"Review your handbook",desc:"Check AI-generated policies for accuracy",btn:null,hi:false},
+             {done:true,title:"Approve & finalize",desc:"Lock in the handbook for distribution",btn:null,hi:false},
+             {done:false,title:"Host your handbook",desc:"Publish to a secure, shareable URL employees can access anytime",btn:"Set Up Hosting \u2192",hi:true},
+             {done:false,title:"Send to employees",desc:"Email the handbook link to all "+empCount+" employees and collect acknowledgments",btn:"Send to Employees \u2192",hi:true},
+             {done:false,title:"Track acknowledgments",desc:"See who has read and signed off on the handbook",btn:"View Tracker \u2192",hi:false}
+            ].map(function(task,i){
               return React.createElement("div",{key:i,style:{display:"flex",gap:14,padding:"14px 0",borderBottom:i<4?"1px solid #f5f5f5":"none",alignItems:"flex-start"}},
-                React.createElement("div",{style:{width:22,height:22,borderRadius:"50%",background:task.done?"#D1FAE5":task.hi?PURPLE_LIGHT:"#f4f4f4",border:"1.5px solid "+(task.done?"#6EE7B7":task.hi?PURPLE:"#e0e0e0"),display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,marginTop:1}},
-                  task.done&&React.createElement("span",{style:{fontSize:11,color:"#065F46"}},"✓")
-                ),
-                React.createElement("div",{style:{flex:1}},
-                  React.createElement("div",{style:{fontSize:13,fontWeight:600,color:task.done?"#aaa":"#111",textDecoration:task.done?"line-through":"none"}},task.title),
-                  React.createElement("div",{style:{fontSize:12,color:"#aaa",marginTop:2,lineHeight:1.5}},task.desc)
-                ),
-                task.btn && React.createElement("button",{
-                  disabled: !!task.disabled,
-                  onClick: task.action||function(){},
-                  style:{
-                    padding:"6px 14px",borderRadius:8,border:"none",
-                    background: task.disabled ? "#e8e8e8" : task.done ? "#D1FAE5" : task.hi ? PURPLE : "#f0f0f0",
-                    color: task.disabled ? "#bbb" : task.done ? "#065F46" : task.hi ? "white" : "#666",
-                    fontSize:12,fontWeight:600,
-                    cursor: task.disabled||!task.action ? "default" : "pointer",
-                    whiteSpace:"nowrap",flexShrink:0
-                  }
-                }, task.btn)
+                React.createElement("div",{style:{width:22,height:22,borderRadius:"50%",background:task.done?"#D1FAE5":task.hi?PURPLE_LIGHT:"#f4f4f4",border:"1.5px solid "+(task.done?"#6EE7B7":task.hi?PURPLE:"#e0e0e0"),display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,marginTop:1}},task.done&&React.createElement("span",{style:{fontSize:11,color:"#065F46"}},"\u2713")),
+                React.createElement("div",{style:{flex:1}},React.createElement("div",{style:{fontSize:13,fontWeight:600,color:task.done?"#aaa":"#111",textDecoration:task.done?"line-through":"none"}},task.title),React.createElement("div",{style:{fontSize:12,color:"#aaa",marginTop:2,lineHeight:1.5}},task.desc)),
+                task.btn&&React.createElement("button",{style:{padding:"6px 14px",borderRadius:8,border:"none",background:task.hi?PURPLE:"#f0f0f0",color:task.hi?"white":"#666",fontSize:12,fontWeight:600,cursor:"pointer",whiteSpace:"nowrap",flexShrink:0}},task.btn)
               );
             })
           )
@@ -623,26 +299,13 @@ function HomePage(props) {
             ].map(function(item,i){
               return React.createElement("div",{key:i,style:{display:"flex",gap:12,paddingBottom:14,borderBottom:i<3?"1px solid #f5f5f5":"none",marginBottom:i<3?14:0}},
                 React.createElement("div",{style:{width:8,height:8,borderRadius:"50%",background:PURPLE,flexShrink:0,marginTop:5}}),
-                React.createElement("div",{style:{flex:1}},
-                  React.createElement("div",{style:{fontSize:13,color:"#111",fontWeight:500}},item.msg),
-                  React.createElement("div",{style:{fontSize:11,color:"#888",marginTop:2}},item.sub),
-                  React.createElement("div",{style:{fontSize:10,color:"#bbb",marginTop:2}},item.time)
-                )
+                React.createElement("div",{style:{flex:1}},React.createElement("div",{style:{fontSize:13,color:"#111",fontWeight:500}},item.msg),React.createElement("div",{style:{fontSize:11,color:"#888",marginTop:2}},item.sub),React.createElement("div",{style:{fontSize:10,color:"#bbb",marginTop:2}},item.time))
               );
             })
           )
         )
       )
-    ),
-    showHosting && React.createElement(HostingPanel, {
-      org: org,
-      employees: employees,
-      onClose: function(){ setShowHosting(false); },
-      onSaved: function(d){ if(hostingMode==="setup"){ onHostingDone(d); } },
-      startAtSend: hostingMode==="send",
-      onPublished: function(){ setPublished(true); setShowHosting(false); }
-    }),
-
+    )
   );
 }
 
@@ -678,8 +341,6 @@ export default function App() {
   var [dashPage, setDashPage] = useState("home");
   var [activeNav, setActiveNav] = useState("Home");
   var [dropdownOpen, setDropdownOpen] = useState(false);
-  var [hostingDone, setHostingDone] = useState(false);
-  var [hostingData, setHostingData] = useState(null);
 
   var scrollBottom = useCallback(function(){setTimeout(function(){if(bottomRef.current)bottomRef.current.scrollIntoView({behavior:"smooth"});},50);},[]);
   var scrollEmpBottom = useCallback(function(){setTimeout(function(){if(empBottomRef.current)empBottomRef.current.scrollIntoView({behavior:"smooth"});},50);},[]);
@@ -824,14 +485,14 @@ export default function App() {
               [{label:"Org Profile",action:function(){setDashPage("orgprofile");setDropdownOpen(false);},hi:true},
                {label:"Account Settings",action:function(){setDropdownOpen(false);}},
                {label:"Help & Support",action:function(){setDropdownOpen(false);}},
-               {label:"Sign Out / Restart",action:function(){setScreen("onboarding");setOrgPhase("org");setProfile(EMPTY_PROFILE);setOrgComplete(false);setMessages([{from:"ai",text:ORG_STEPS[0].question,chips:null,multiChip:false,contactForm:false}]);setInput("");setLoading(false);setMultiSelected([]);setContactInputs({name:"",email:"",phone:""});setOpenTips({});step.current=0;setEmpMessages([{from:"ai",text:"Great work on the org details! \uD83C\uDF89\n\nNow let\u2019s import your employees. Upload a CSV with:\n\nRequired: first_name, last_name, email\nOptional: city, state, location, title, department\n\nEmployee locations will auto-populate your jurisdiction counts."}]);setEmpInput("");setEmployees([]);setResolvingId(null);setEmpFilter("all");setEmpTab("contacts");setGenProgress(0);setGenDone(false);setGenStatus("");setDashPage("home");setActiveNav("Home");setDropdownOpen(false);setHostingDone(false);setHostingData(null);}}
+               {label:"Sign Out",action:function(){setDropdownOpen(false);}}
               ].map(function(item){return React.createElement("button",{key:item.label,onClick:item.action,style:{width:"100%",textAlign:"left",padding:"10px 16px",border:"none",background:"transparent",fontSize:13,color:item.hi?PURPLE:"#333",fontWeight:item.hi?600:400,cursor:"pointer"}},item.label);})
             )
           )
         )
       ),
       dashPage==="home"
-        ?React.createElement(HomePage,{org:profile,employees:employees,jurisdictions:dashJurisdictions,hostingDone:hostingDone,hostingData:hostingData,onHostingDone:function(d){setHostingDone(true);setHostingData(d);}})
+        ?React.createElement(HomePage,{org:profile,employees:employees,jurisdictions:dashJurisdictions})
         :React.createElement(OrgProfilePage,{org:profile,onBack:function(){setDashPage("home");},jurisdictions:dashJurisdictions})
     )
   );
@@ -909,28 +570,14 @@ export default function App() {
               )
             ),
             empTab==="jurisdictions"&&React.createElement("div",null,
-              React.createElement("div",{style:{fontSize:12,color:"#888",marginBottom:12,lineHeight:1.6}},"Auto-detected from CSV location data. Municipalities shown are tracked compliance areas for each state."),
+              React.createElement("div",{style:{fontSize:12,color:"#888",marginBottom:12,lineHeight:1.6}},"Auto-detected from CSV location data. Adjust manually if needed."),
               Object.keys(counts.stateCounts).length===0?React.createElement("div",{style:{fontSize:12,color:"#bbb"}},"Upload a CSV with location data to see jurisdiction counts.")
               :React.createElement("div",{style:{display:"flex",flexDirection:"column",gap:8}},
                 Object.keys(counts.stateCounts).sort().map(function(state){
-                  var detectedMuns=counts.munCounts[state]||{};
-                  var knownMuns=MUNICIPALITIES[state]||[];
+                  var muns=counts.munCounts[state]||{};
                   return React.createElement("div",{key:state,style:{padding:"10px 12px",borderRadius:9,border:"1px solid #e8e8e8",background:"#fff"}},
-                    React.createElement("div",{style:{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:knownMuns.length?8:0}},
-                      React.createElement("div",{style:{fontSize:12,fontWeight:700,color:"#222"}},state),
-                      React.createElement("div",{style:{fontSize:12,fontWeight:600,color:PURPLE,background:PURPLE_LIGHT,padding:"2px 10px",borderRadius:10}},counts.stateCounts[state]+" employees")
-                    ),
-                    knownMuns.length>0&&React.createElement("div",null,
-                      React.createElement("div",{style:{fontSize:10,color:"#aaa",marginBottom:4,textTransform:"uppercase",letterSpacing:0.5}},"Tracked municipalities"),
-                      React.createElement("div",{style:{display:"flex",flexWrap:"wrap",gap:4}},
-                        knownMuns.map(function(mun){
-                          var count=detectedMuns[mun]||null;
-                          return React.createElement("div",{key:mun,style:{fontSize:10,padding:"2px 8px",borderRadius:8,background:count?"#f5f0ff":"#f5f5f5",color:count?PURPLE:"#aaa",border:"1px solid "+(count?"#e0d5ff":"#eee")}},
-                            mun+" \xB7 "+(count||0)
-                          );
-                        })
-                      )
-                    )
+                    React.createElement("div",{style:{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:Object.keys(muns).length?8:0}},React.createElement("div",{style:{fontSize:12,fontWeight:700,color:"#222"}},state),React.createElement("div",{style:{fontSize:12,fontWeight:600,color:PURPLE,background:PURPLE_LIGHT,padding:"2px 10px",borderRadius:10}},counts.stateCounts[state]+" employees")),
+                    Object.keys(muns).length>0&&React.createElement("div",{style:{display:"flex",flexWrap:"wrap",gap:4}},Object.keys(muns).map(function(mun){return React.createElement("div",{key:mun,style:{fontSize:10,padding:"2px 8px",borderRadius:8,background:"#f5f0ff",color:PURPLE}},mun+" \xB7 "+muns[mun]);}))
                   );
                 })
               )
